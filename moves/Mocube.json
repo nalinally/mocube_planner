@@ -1,0 +1,16 @@
+{
+  "moves": [
+    {
+      "name": "Mocube Slide",
+      "order": 3,
+      "def": [[
+        "?!",
+        "##"
+      ]],
+      "permGen": true,
+      "animSeq": [
+        ["slide", [1, 0, 0]]
+      ]
+    }
+  ]
+}
