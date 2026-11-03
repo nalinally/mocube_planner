@@ -2,6 +2,8 @@
 手の列をサーボ指令の列 (計画) に変換し、mocube_estimator の積算で再生して確かめる.
 
 動くモジュールが接触しているすべての面で、同じ相対移動になるようサーボを回す。
+赤外線を受けずに 1.5 マスまで行き過ぎたときに、止まったピニオンにかみ込まないよう、
+2 マス先が空いていれば、そこで接する面のサーボも回しておく。
 """
 
 from mocube_estimator.estimator import Estimator
@@ -9,21 +11,27 @@ from mocube_estimator.geometry import DRIVES, FACES, NEGATIVE_FACE, POSITIVE_FAC
 from mocube_planner.model import add, check_move, dot, SIDES
 import numpy as np
 
-EDGE_LENGTH = 0.1131  # state_estimator の edge_length_mm
-SPEED_GAIN = 0.0002   # state_estimator の speed_gain_mm [m/s/deg]
+EDGE_LENGTH_MM = 113.1  # state_estimator と move_server の edge_length_mm
+SPEED_GAIN_MM = 0.2     # state_estimator と move_server の speed_gain_mm [mm/s/deg]
+EDGE_LENGTH = EDGE_LENGTH_MM / 1000.0
+SPEED_GAIN = SPEED_GAIN_MM / 1000.0
 MAX_REPLAY_ERROR = 0.001  # [m]
 
 
 def servo_commands(positions, module, step, speed_deg):
-    """{(ID, サーボ): 回転指令 [deg]} を返す. 移動の前後で接触する面をすべて回す."""
+    """{(ID, サーボ): 回転指令 [deg]} を返す. 移動の前後と行き過ぎた先で接触する面をすべて回す."""
     occupied = {c: i for i, c in positions.items()}
     source = positions[module]
     commands = {}
+    destination = add(source, step)
+    beyond = add(destination, step)
+    # 2 マス先にモジュールがいるとき、隣の面のサーボはそのモジュールを押してしまう
+    cells = (source, destination) if beyond in occupied else (source, destination, beyond)
     for side in SIDES:
         if dot(side, step) != 0:
             continue
         axis = int(np.flatnonzero(side)[0])
-        for cell in (source, add(source, step)):
+        for cell in cells:
             other = occupied.get(add(cell, side))
             if other is None:
                 continue
@@ -70,7 +78,12 @@ def build_plan(initial, moves, goal, speed_deg=100.0):
         })
     if set(positions.values()) != set(goal):
         raise ValueError('手の列が目標形状に着きません')
-    return {'initial': dict(initial), 'steps': steps}
+    return {
+        'edge_length_mm': EDGE_LENGTH_MM,
+        'speed_gain_mm': SPEED_GAIN_MM,
+        'initial': dict(initial),
+        'steps': steps,
+    }
 
 
 def replay(plan):

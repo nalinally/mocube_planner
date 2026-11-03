@@ -1,4 +1,6 @@
 {
+  "edge_length_mm": 113.1,
+  "speed_gain_mm": 0.2,
   "initial": {
     "0": [
       0,
@@ -89,7 +91,7 @@
         1,
         0
       ],
-      "duration_s": 5.655,
+      "duration_s": 5.654999999999999,
       "commands": [
         {
           "module": 0,
@@ -99,6 +101,12 @@
         },
         {
           "module": 3,
+          "servo": 1,
+          "face": "r",
+          "angle_deg": 100.0
+        },
+        {
+          "module": 6,
           "servo": 1,
           "face": "r",
           "angle_deg": 100.0
@@ -206,7 +214,7 @@
         0,
         0
       ],
-      "duration_s": 5.655,
+      "duration_s": 5.654999999999999,
       "commands": [
         {
           "module": 10,
@@ -323,7 +331,7 @@
         0,
         1
       ],
-      "duration_s": 5.655,
+      "duration_s": 5.654999999999999,
       "commands": [
         {
           "module": 11,
@@ -434,7 +442,7 @@
         1,
         0
       ],
-      "duration_s": 5.655,
+      "duration_s": 5.654999999999999,
       "commands": [
         {
           "module": 9,
@@ -545,7 +553,7 @@
         0,
         0
       ],
-      "duration_s": 5.655,
+      "duration_s": 5.654999999999999,
       "commands": [
         {
           "module": 9,
@@ -656,7 +664,7 @@
         0,
         0
       ],
-      "duration_s": 5.655,
+      "duration_s": 5.654999999999999,
       "commands": [
         {
           "module": 10,
@@ -773,7 +781,7 @@
         2,
         0
       ],
-      "duration_s": 5.655,
+      "duration_s": 5.654999999999999,
       "commands": [
         {
           "module": 6,
@@ -878,7 +886,7 @@
         2,
         0
       ],
-      "duration_s": 5.655,
+      "duration_s": 5.654999999999999,
       "commands": [
         {
           "module": 3,
@@ -989,7 +997,7 @@
         2,
         1
       ],
-      "duration_s": 5.655,
+      "duration_s": 5.654999999999999,
       "commands": [
         {
           "module": 4,
@@ -1094,7 +1102,7 @@
         2,
         2
       ],
-      "duration_s": 5.655,
+      "duration_s": 5.654999999999999,
       "commands": [
         {
           "module": 5,

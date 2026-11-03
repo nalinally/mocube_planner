@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from mocube_planner.backends.pathfinder import parse_scen, PathfinderBackend, to_module_moves
-from mocube_planner.commands import build_plan, EDGE_LENGTH, replay
+from mocube_planner.commands import build_plan, EDGE_LENGTH, replay, servo_commands
 from mocube_planner.model import check_move, contacts, load_scenario, unreachable_reason
 import pytest
 
@@ -77,3 +77,19 @@ def test_parse_scen_ignores_color_header():
 def test_backend_reports_missing_binary(tmp_path):
     with pytest.raises(FileNotFoundError, match='build_pathfinder'):
         PathfinderBackend(tmp_path / 'Pathfinder', PACKAGE / 'moves')
+
+
+def test_servo_commands_cover_contact_beyond_the_destination():
+    # ID1 が ID0, ID2 の +y 側を +x へ。ID3 は行き過ぎたときにだけ接する
+    positions = {0: (0, 0, 0), 1: (0, 1, 0), 2: (1, 0, 0), 3: (2, 0, 0)}
+    assert (3, 5) not in servo_commands({i: c for i, c in positions.items() if i != 3},
+                                        1, (1, 0, 0), 100.0)
+    assert (1, 5) in servo_commands(positions, 1, (1, 0, 0), 100.0)
+    # ID1 が -y 側のときは、相手の b 面のサーボを回す
+    positions = {0: (0, 0, 0), 1: (0, -1, 0), 2: (1, 0, 0), 3: (2, 0, 0)}
+    assert (3, 5) in servo_commands(positions, 1, (1, 0, 0), 100.0)
+
+
+def test_servo_commands_do_not_push_a_module_two_cells_ahead():
+    positions = {0: (0, 0, 0), 1: (0, -1, 0), 2: (1, 0, 0), 3: (2, 0, 0), 4: (2, -1, 0)}
+    assert (3, 5) not in servo_commands(positions, 1, (1, 0, 0), 100.0)
