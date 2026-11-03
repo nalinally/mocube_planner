@@ -12,7 +12,7 @@ mocube の変形計画と、その実行を受け持つ ROS 2 パッケージで
 | `model.py` | 状態 (ID -> 格子座標)、手の検査、シナリオの読み込み |
 | `backends/pathfinder.py` | 探索器。Pathfinder を外部プロセスとして呼ぶ |
 | `commands.py` | 手 -> サーボ指令、`mocube_estimator` の積算での再生確認 |
-| `executor.py` / `plan_executor.py` | 計画の実行 (中身 / ROS ノード) |
+| `executor.py` / `plan_executor.py` | 計画を 1 手ずつ頼む (中身 / action クライアントのノード) |
 | `sim_modules.py` | 実機なしで試すための `device_manager` の代わり |
 | `render_plan.py` | 計画を GIF にする |
 
@@ -49,28 +49,37 @@ ros2 run mocube_planner render_plan plan.json -o plan.gif
 
 ## 実行する
 
+`plan_executor` は計画を 1 手ずつ `mocube_executor` の `move_server` に頼む action クライアントです。
+1 手の止め方は [mocube_executor の README](../mocube_executor/README.md) にあります。
+
 ```bash
 ros2 run mocube_bridge device_manager
 ros2 run mocube_estimator state_estimator
+ros2 run mocube_executor move_server
 ros2 run mocube_planner plan_executor --ros-args -p plan_file:=plan.json
 ```
 
 開始すると **すぐにサーボが回ります**。
 
-1. `/servo_commands` の購読者が揃い、全モジュールの位置が決まるまで待ちます
+1. `move_server` が見え、全モジュールの位置が決まるまで待ちます
 2. 実機の形が計画の初期形状と同じか確かめ、計画の ID を実機の ID に座標で読み替えます
-3. 1 手ごとにサーボを回して止め、位置のずれと、新しくできた接触の赤外線の受信を確かめます
-4. 確認が取れない、モジュールがオフラインになる、のどれかでサーボを止めて異常終了します
+3. 1 手を送り、結果を受け取ってから次の手を送ります
+4. 手が失敗したら、全モジュールの位置を出して異常終了します
+
+結果が届かないとき (`move_server` が消えた、時間を超えた) は、実行されたか分からないので **送り直しません**。
+キャンセルを頼んで今の位置を見て、手の後の形で `move_server` も生きていれば次へ進み、それ以外は異常終了します。
 
 | パラメータ | 既定値 | 内容 |
 |---|---|---|
 | `plan_file` | | 計画の JSON |
-| `edge_length_mm` | 113.1 | モジュールの一辺 |
-| `position_tolerance_mm` | 10.0 | 手の後の位置のずれの許容 |
-| `verify_timeout` | 3.0 | 手の後、確認を待つ時間 [s] |
+| `position_tolerance_mm` | 10.0 | 形の判定のずれの許容 |
 | `start_timeout` | 30.0 | 開始の条件が揃うのを待つ時間 [s] |
-| `require_ir` | true | 赤外線の受信も確かめるか |
-| `min_servo_subscribers` | 2 | 開始に必要な `/servo_commands` の購読者数 |
+| `result_timeout_ratio` / `result_timeout_margin` | 4.0 / 40.0 | 結果を待つ上限 = `duration_s` × ratio + margin [s]。`move_server` の待ち時間より長くします |
+| `server_lost_timeout` | 0.5 | `move_server` が見えなくなってから、消えたと判断するまでの時間 [s] |
+| `lost_wait` | 1.0 | キャンセルを頼んでから位置を見るまでの時間 [s] |
+
+計画には作ったときの `edge_length_mm` と `speed_gain_mm` が入っていて、`move_server` が自分の設定と照合します。
+これらが無い古い計画は読めないので、`plan` で作り直してください。
 
 ### 実機なしで試す
 
@@ -79,10 +88,16 @@ ros2 run mocube_planner plan_executor --ros-args -p plan_file:=plan.json
 ```bash
 ros2 run mocube_estimator state_estimator
 ros2 run mocube_planner sim_modules --ros-args -p plan_file:=plan.json
+ros2 run mocube_executor move_server
 ros2 run mocube_planner plan_executor --ros-args -p plan_file:=plan.json
 ```
 
 実機のモジュールと混ざらないよう、`ROS_DOMAIN_ID` を変えるか、`device_manager` を止めておきます。
+
+| `sim_modules` のパラメータ | 既定値 | 内容 |
+|---|---|---|
+| `ir_range` | 0.1 | 赤外線を受ける面内のずれ (一辺に対する割合) |
+| `ir_only_when_stopped` | false | true なら全サーボの停止中だけ受信します。行き過ぎて戻る動きを試せます |
 
 ## 制限
 
@@ -92,7 +107,8 @@ ros2 run mocube_planner plan_executor --ros-args -p plan_file:=plan.json
 - 重力は考えていません
 - Pathfinder の A* は `Heuristic exhibited non-consistent behavior` で異常終了することがあります。
   これは解がないことの証明ではありません (探し尽くして解がないときは、空の出力で終わります)
-- 手の時間は `speed_gain_mm` の仮の値から計算しています。実機で測って合わせる必要があります
-- `state_estimator` は赤外線を受けるたびに位置を 1 マス隣にリセットします。
-  滑っている途中でも受信が続くと、推定位置が引き戻されるかもしれません (実機未確認)。
-  途中でも受信を作っていた版の `sim_modules` で、半マス足りずに止まったことが 1 度あります (原因は未特定)
+- 行き過ぎの判定と戻す量は推定位置 (`speed_gain_mm` の仮の値での積算) を見ています。
+  実機で測って合わせるまで、実際の 1.5 マスとは一致しません
+- 赤外線が格子点の手前で受かると、その場で止まります。受かる範囲は実機で測っていません
+- 2 マス先が空いている手では、行き過ぎた先で接する面のサーボも最初から回します。
+  かみ合う相手のいないサーボも回るので、実機で問題がないか確かめる必要があります
