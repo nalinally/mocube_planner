@@ -8,6 +8,8 @@ ID0 は原点に固定で、シナリオファイルでは static のモジュ�
 import json
 from pathlib import Path
 
+from mocube_estimator.geometry import contacts  # noqa: F401  (ここからも使えるようにする)
+
 SIDES = tuple(
     tuple((sign if axis == i else 0) for i in range(3))
     for axis in range(3) for sign in (1, -1))
@@ -43,19 +45,6 @@ def is_connected(cells):
                 seen.add(neighbor)
                 stack.append(neighbor)
     return len(seen) == len(cells)
-
-
-def contacts(positions):
-    """接触している組を (負の側の ID, 正の側の ID, 軸) の集合で返す."""
-    occupied = {cell: module for module, cell in positions.items()}
-    found = set()
-    for module, cell in positions.items():
-        for axis in range(3):
-            side = tuple(int(axis == i) for i in range(3))
-            other = occupied.get(add(cell, side))
-            if other is not None:
-                found.add((module, other, axis))
-    return found
 
 
 def check_move(positions, module, step):
