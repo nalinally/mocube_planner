@@ -2,7 +2,10 @@
 sim_modules ノード: 実機なしで計画を試すための、device_manager の代わり.
 
 計画の全モジュールをオンラインとして /modules に流し、state_estimator を計画の初期形状に置く。
-隣接する組の赤外線の受信は、全サーボが止まっている間だけ /module_states の位置から作る。
+赤外線の受信は /module_states の位置から作る。実機と同じく、滑っている間も、
+面内のずれが ir_range (一辺に対する割合) 以内の組は受信し続ける。
+パラメータ ir_only_when_stopped を true にすると全サーボの停止中だけ受信するので、
+行き過ぎて戻る動きを試せる。
 """
 
 import json
@@ -19,14 +22,12 @@ from mocube_msgs.msg import (
 )
 from mocube_msgs.srv import SetGridPositions
 from mocube_planner.executor import load_plan
-from mocube_planner.model import contacts
 import numpy as np
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
 RECEIVER_FACES = ('u', 'r', 'f')
-ON_GRID_RATIO = 0.1  # 一辺に対する割合
 
 
 class SimModules(Node):
@@ -37,6 +38,8 @@ class SimModules(Node):
         plan_file = self.declare_parameter('plan_file', '').value
         self._edge_length = self.declare_parameter('edge_length_mm', 113.1).value / 1000.0
         publish_period = self.declare_parameter('publish_period', 0.1).value
+        self._ir_range = self.declare_parameter('ir_range', 0.1).value
+        self._ir_only_when_stopped = self.declare_parameter('ir_only_when_stopped', False).value
 
         with open(plan_file, encoding='utf-8') as f:
             self._initial = load_plan(json.load(f))['initial']
@@ -84,15 +87,17 @@ class SimModules(Node):
         self._publisher.publish(msg)
 
     def _update_receptions(self, now):
-        if self._driving:
+        if self._ir_only_when_stopped and self._driving:
             return
-        cells = {}
-        for module, position in self._positions.items():
-            cell = np.rint(position / self._edge_length)
-            if np.linalg.norm(position / self._edge_length - cell) <= ON_GRID_RATIO:
-                cells[module] = tuple(int(v) for v in cell)
-        for lower, upper, axis in contacts(cells):
-            self._receptions[(lower, FACES[POSITIVE_FACE[axis]])] = (upper, now)
+        limit = self._ir_range * self._edge_length
+        for lower, lower_position in self._positions.items():
+            for upper, upper_position in self._positions.items():
+                offset = upper_position - lower_position
+                for axis in range(3):
+                    others = [k for k in range(3) if k != axis]
+                    if (abs(offset[axis] - self._edge_length) <= limit
+                            and all(abs(offset[k]) <= limit for k in others)):
+                        self._receptions[(lower, FACES[POSITIVE_FACE[axis]])] = (upper, now)
 
 
 def main(args=None):
