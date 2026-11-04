@@ -13,7 +13,6 @@ mocube の変形計画と、その実行を受け持つ ROS 2 パッケージで
 | `backends/pathfinder.py` | 探索器。Pathfinder を外部プロセスとして呼ぶ |
 | `commands.py` | 手 -> サーボ指令、`mocube_estimator` の積算での再生確認 |
 | `executor.py` / `plan_executor.py` | 計画を 1 手ずつ頼む (中身 / action クライアントのノード) |
-| `sim_modules.py` | 実機なしで試すための `device_manager` の代わり |
 | `render_plan.py` | 計画を GIF にする |
 
 探索器は `find_moves(initial, goal)` を持つクラスで、`{ID: 座標}` と目標の座標の集合から
@@ -83,21 +82,16 @@ ros2 run mocube_planner plan_executor --ros-args -p plan_file:=plan.json
 
 ### 実機なしで試す
 
-`device_manager` の代わりに `sim_modules` を使います。`state_estimator` を計画の初期形状に置きます。
+`device_manager` の代わりに `mocube_sim` の `module_sim` を使います。
+推定とは別に本当の位置を持つシミュレータです ([mocube_sim の README](../mocube_sim/README.md))。
 
 ```bash
+export ROS_DOMAIN_ID=77   # 実機と混ざらないよう、全ターミナルで同じ値
+ros2 run mocube_sim module_sim --ros-args -p layout_file:=plan.json
 ros2 run mocube_estimator state_estimator
-ros2 run mocube_planner sim_modules --ros-args -p plan_file:=plan.json
 ros2 run mocube_executor move_server
 ros2 run mocube_planner plan_executor --ros-args -p plan_file:=plan.json
 ```
-
-実機のモジュールと混ざらないよう、`ROS_DOMAIN_ID` を変えるか、`device_manager` を止めておきます。
-
-| `sim_modules` のパラメータ | 既定値 | 内容 |
-|---|---|---|
-| `ir_range` | 0.1 | 赤外線を受ける面内のずれ (一辺に対する割合) |
-| `ir_only_when_stopped` | false | true なら全サーボの停止中だけ受信します。行き過ぎて戻る動きを試せます |
 
 ## 制限
 

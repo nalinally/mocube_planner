@@ -31,7 +31,6 @@ setup(
             'plan = mocube_planner.plan:main',
             'render_plan = mocube_planner.render_plan:main',
             'plan_executor = mocube_planner.plan_executor:main',
-            'sim_modules = mocube_planner.sim_modules:main',
         ],
     },
 )
